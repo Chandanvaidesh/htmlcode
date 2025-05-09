@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta 
+    name="viewport" 
+    content="width=device-width, initial-scale=1.0"
+  />
+  <title>Full-Mode Real-Time GPS & Speed Tracker</title>
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 1em;
+    }
+    #map {
+      height: 60vh;
+      border: 1px solid #ccc;
+    }
+    .info {
+      margin: 0.5em 0;
+    }
+    .info span {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>My Location & Speed (Full-Mode)</h1>
+
+  <div class="info">Latitude: <span id="lat">–</span></div>
+  <div class="info">Longitude: <span id="lng">–</span></div>
+  <div class="info">Speed: <span id="spd">–</span></div>
+
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-QV8FQXM4k0ZJCkaB40tFHPbNe9iI0bT+igYdLW6jJMk="
+    crossorigin=""
+  ></script>
+
+  <script>
+    // --- 1. HTTPS check (Geolocation API only works in secure contexts) ---
+    if (location.protocol !== 'https:') {
+      alert(
+        'Error: This page must be served over HTTPS for geolocation to work.'
+      );
+      throw new Error('Insecure context');
+    }
+
+    // --- 2. Initialize Leaflet map & marker ---
+    const map = L.map('map').setView([0, 0], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+    const marker = L.marker([0, 0]).addTo(map);
+
+    // --- 3. Update UI & map on position change ---
+    function updateUI({ latitude, longitude, speed }) {
+      document.getElementById('lat').textContent = latitude.toFixed(6);
+      document.getElementById('lng').textContent = longitude.toFixed(6);
+      document.getElementById('spd').textContent =
+        speed !== null
+          ? (speed * 3.6).toFixed(1) + ' km/h'
+          : 'N/A';
+      map.invalidateSize();               // ensure correct sizing
+      marker.setLatLng([latitude, longitude]);
+      map.setView([latitude, longitude]);
+    }
+
+    // --- 4. Handle errors (including retries) ---
+    let retries = 0;
+    function handleError(err) {
+      console.error('Geolocation error', err);
+      if (err.code === err.PERMISSION_DENIED) {
+        alert('Location permission denied. Please allow it in your browser settings.');
+      } else if (err.code === err.POSITION_UNAVAILABLE && retries < 3) {
+        retries++;
+        setTimeout(startGeolocation, 1000);
+      } else {
+        alert('Unable to retrieve location: ' + err.message);
+      }
+    }
+
+    // --- 5. Start watching position ---
+    let watchId = null;
+    function startGeolocation() {
+      if (!navigator.geolocation) {
+        return alert('Geolocation is not supported by your browser.');
+      }
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+      watchId = navigator.geolocation.watchPosition(
+        pos => {
+          retries = 0;
+          updateUI(pos.coords);
+        },
+        handleError,
+        {
+          enableHighAccuracy: true, // request GPS-level accuracy
+          maximumAge: 0,            // no cached positions
+          timeout: 7000             // 7s max wait per fix
+        }
+      );
+    }
+
+    // Kick off
+    startGeolocation();
+  </script>
+</body>
+</html>
